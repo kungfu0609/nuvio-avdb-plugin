@@ -92,6 +92,25 @@ function resolveApiUrl(itemId, mediaType) {
         .catch(function () { return ""; });
 }
 
+// Trong avdb.js trên GitHub, dùng cùng bộ giải mã Base64 + Dean Edwards + AJAX POST:
+function decodeBase64Matches(text) {
+    var decodedChunks = [];
+    var b64Regex = /(?:atob\(['"]([A-Za-z0-9+/=]{20,})['"]\)|['"]([A-Za-z0-9+/=]{40,})['"])/g;
+    var m;
+    while ((m = b64Regex.exec(text)) !== null) {
+        var candidate = m[1] || m[2];
+        try {
+            if (typeof atob === "function") {
+                var dec = atob(candidate);
+                if (dec.indexOf("http") !== -1 || dec.indexOf(".m3u8") !== -1) {
+                    decodedChunks.push(dec);
+                }
+            }
+        } catch (e) {}
+    }
+    return decodedChunks.join("\n");
+}
+
 function getStreams(itemId, mediaType, season, episode) {
     return resolveApiUrl(itemId, mediaType)
         .then(function (apiUrl) {
