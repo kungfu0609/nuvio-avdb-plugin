@@ -16,66 +16,55 @@ function extractHls(embedUrl) {
     var hash = parts[parts.length - 1] || "";
     var origin = parts.slice(0, 3).join("/");
     
-    var headers = {
-        "User-Agent": UA,
-        "Referer": embedUrl,
-        "Origin": origin
-    };
-
-    // 1. Gửi POST đâm thẳng vào API ẩn của Upload18
+    // Đâm trực tiếp API nguồn bằng Fetch của iPad
     return fetch(origin + "/api/source/" + hash, {
         method: "POST",
         headers: {
-            "User-Agent": headers["User-Agent"],
-            "Referer": headers["Referer"],
-            "Origin": headers["Origin"],
+            "User-Agent": UA,
+            "Referer": embedUrl,
+            "Origin": origin,
             "Content-Type": "application/x-www-form-urlencoded"
         },
         body: "r=https%3A%2F%2Favdbapi.com%2F&d=" + origin.replace("https://", "")
     })
     .then(function(res) { return res.text(); })
-    .then(function(text) {
-        var cleanText = text.replace(/\\\//g, "/");
-        var m = cleanText.match(/https?:\/\/[^\s"'<>\\]+?\.(?:m3u8|mp4)/i);
+    .then(function(txt) {
+        var m = txt.replace(/\\\//g, "/").match(/https?:\/\/[^\s"'<>\\]+?\.(?:m3u8|mp4)/i);
         if (m) return m[0];
-        throw new Error("API POST Failed");
-    })
-    .catch(function() {
-        // 2. Dự phòng: Quét trang HTML nếu API bị đổi
-        return fetch(embedUrl, { 
-            headers: { "User-Agent": UA, "Referer": "https://avdbapi.com/" } 
-        })
+        
+        // Dự phòng cào HTML
+        return fetch(embedUrl, { headers: { "User-Agent": UA, "Referer": "https://avdbapi.com/" } })
         .then(function(res) { return res.text(); })
         .then(function(html) {
-            var packedMatch = html.match(/eval\(function\(p,a,c,k,e,[dr]\)\{.*?\}\((.*?)\)\)/);
+            var packed = html.match(/eval\(function\(p,a,c,k,e,[dr]\)\{.*?\}\((.*?)\)\)/);
             var unpacked = "";
-            if (packedMatch) {
+            if (packed) {
                 try {
-                    // Dùng JSON.parse an toàn thay vì eval để tương thích QuickJS
-                    var strArgs = "[" + packedMatch[1] + "]";
-                    var args = eval(strArgs); 
+                    var args = eval("[" + packed[1] + "]");
                     unpacked = unpackDeanEdwards(args[0], args[1], args[2], args[3].split('|'));
                 } catch(e) {}
             }
-            var combined = (html + "\n" + unpacked).replace(/\\\//g, "/");
-            var m = combined.match(/https?:\/\/[^\s"'<>\\]+?\.(?:m3u8|mp4)/i);
-            return m ? m[0] : null;
+            var m2 = (html + "\n" + unpacked).replace(/\\\//g, "/").match(/https?:\/\/[^\s"'<>\\]+?\.(?:m3u8|mp4)/i);
+            return m2 ? m2[0] : null;
         });
-    });
+    }).catch(function() { return null; });
 }
 
 function getStreams(tmdbId) {
     var id = String(tmdbId || "");
     
-    // Bắt đúng tín hiệu từ Catalog Addon
-    if (id.indexOf("avdb_") !== 0) return Promise.resolve([]);
-    var numId = id.split("_")[1];
-
+    // BẮT ĐÚNG TIỀN TỐ tt99 TỪ ADDON RENDER ĐỂ KÍCH HOẠT PLUGIN
+    if (id.indexOf("tt99") !== 0) return Promise.resolve([]);
+    
+    var numId = id.replace("tt99", "");
+    
     return fetch(BASE_API + "?ac=detail&ids=" + numId)
     .then(function(res) { return res.json(); })
     .then(function(data) {
-        var item = (data && data.list && data.list[0]) || {};
-        var serverData = (item.episodes && item.episodes.server_data) || {};
+        var list = data && data.list ? data.list : [];
+        if (list.length === 0) return [];
+        
+        var serverData = list[0].episodes && list[0].episodes.server_data ? list[0].episodes.server_data : {};
         var promises = [];
         
         Object.keys(serverData).forEach(function(epName) {
@@ -87,36 +76,31 @@ function getStreams(tmdbId) {
                     name: "AVDB Native",
                     title: "▶️ Phát Trực Tiếp (" + epName + ")",
                     url: directM3u8,
-                    quality: "1080p",
-                    headers: { "User-Agent": UA, "Referer": "https://upload18.org/" }
+                    // Cấu trúc y hệt chuẩn base.js của VietStream
+                    behaviorHints: { notWebReady: false, proxyHeaders: { request: { "Referer": "https://upload18.org/" } } }
                 }));
             } else if (embedUrl) {
                 promises.push(
-                    extractHls(embedUrl).then(function(m3u8Url) {
-                        if (!m3u8Url) return null;
-                        var origin = embedUrl.split('/').slice(0, 3).join('/');
+                    extractHls(embedUrl).then(function(url) {
+                        if (!url) return null;
+                        var origin = embedUrl.split("/").slice(0, 3).join("/");
                         return {
                             name: "AVDB Native",
                             title: "▶️ Phát Trực Tiếp (" + epName + ")",
-                            url: m3u8Url,
-                            quality: "1080p",
-                            // Quan trọng: Phải truyền header cho Nuvio Native Player
-                            headers: { "User-Agent": UA, "Referer": origin + "/", "Origin": origin }
+                            url: url,
+                            behaviorHints: { notWebReady: false, proxyHeaders: { request: { "Referer": origin + "/", "Origin": origin } } }
                         };
                     })
                 );
             }
         });
         
-        return Promise.all(promises).then(function(results) {
-            var validStreams = [];
-            for (var i = 0; i < results.length; i++) {
-                if (results[i]) validStreams.push(results[i]);
-            }
-            return validStreams;
+        return Promise.all(promises).then(function(arr) {
+            var valid = [];
+            for (var i = 0; i < arr.length; i++) { if (arr[i]) valid.push(arr[i]); }
+            return valid;
         });
-    })
-    .catch(function() { return []; });
+    }).catch(function() { return []; });
 }
 
 module.exports = { getStreams: getStreams };
