@@ -1,14 +1,14 @@
 {
-  "name": "AVDB JAV Repository",
-  "version": "1.2.1",
-  "description": "Local iPad HLS stream extractor for AVDBAPI & Upload18",
+  "name": "AVDB JAV Providers",
+  "version": "1.3.0",
+  "description": "Direct HLS stream provider for AVDBAPI on Nuvio iPad",
   "author": "kungfu0609",
   "scrapers": [
     {
-      "id": "avdb-jav",
-      "name": "AVDB Direct Player",
-      "description": "Trích xuất trực tiếp luồng .m3u8 ngay trên iPad để phát bằng trình phát gốc của Nuvio",
-      "version": "1.2.1",
+      "id": "avdb-jav-native",
+      "name": "AVDB Native Player",
+      "description": "Phát trực tiếp luồng HLS (.m3u8) từ AVDBAPI trên trình phát gốc Nuvio",
+      "version": "1.3.0",
       "author": "kungfu0609",
       "supportedTypes": [
         "movie",
@@ -27,8 +27,7 @@
         "mp4"
       ],
       "limited": false,
-      "disabledPlatforms": [],
-      "supportsExternalPlayer": true
+      "disabledPlatforms": []
     }
   ]
 }
