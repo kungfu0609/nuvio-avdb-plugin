@@ -97,17 +97,24 @@ function extractStreamFromUpload18(embedUrl) {
             .catch(function () { return null; });
     });
 }
-
 function getStreams(tmdbId, mediaType, season, episode) {
     var rawId = String(tmdbId || "").trim();
     var queryPromise;
 
-    if (rawId.indexOf("avdb_") === 0) {
-        var numericId = rawId.replace("avdb_", "").split(":")[0];
+    // 1. Đón lõng Fake IMDb ID từ máy chủ Render truyền xuống
+    if (rawId.indexOf("tt99") === 0) {
+        var numericId = rawId.replace("tt99", "");
         queryPromise = Promise.resolve(BASE_API + "?ac=detail&ids=" + encodeURIComponent(numericId));
-    } else if (/^[a-zA-Z]{2,6}-\d{2,5}$/i.test(rawId)) {
+    } 
+    // 2. Các logic fallback cũ (Mã JAV, TMDB chuẩn)
+    else if (rawId.indexOf("avdb_") === 0) {
+        var plainId = rawId.replace("avdb_", "").split(":")[0];
+        queryPromise = Promise.resolve(BASE_API + "?ac=detail&ids=" + encodeURIComponent(plainId));
+    } 
+    else if (/^[a-zA-Z]{2,6}-\d{2,5}$/i.test(rawId)) {
         queryPromise = Promise.resolve(BASE_API + "?ac=detail&wd=" + encodeURIComponent(rawId.toUpperCase()));
-    } else {
+    } 
+    else {
         var type = mediaType === "tv" ? "series" : "movie";
         var metaId = rawId.indexOf("tt") === 0 ? rawId : "tmdb:" + rawId;
         queryPromise = fetch(CINEMETA_BASE + "/" + type + "/" + encodeURIComponent(metaId) + ".json")
@@ -135,33 +142,20 @@ function getStreams(tmdbId, mediaType, season, episode) {
 
                     list.forEach(function (item) {
                         var serverData = (item.episodes && item.episodes.server_data) || {};
-                        var label = item.movie_code ? "[" + item.movie_code + "] " + (item.name || "") : (item.name || "AVDB");
+                        var label = item.movie_code ? "[" + item.movie_code + "] " : "";
 
                         Object.keys(serverData).forEach(function (epName) {
                             var epInfo = serverData[epName] || {};
-                            var directM3u8 = (epInfo.link_m3u8 || "").trim();
                             var embedUrl = (epInfo.link_embed || "").trim();
 
-                            if (directM3u8) {
-                                var origin = getOrigin(embedUrl || directM3u8);
-                                tasks.push(Promise.resolve({
-                                    name: "AVDB Plugin",
-                                    title: label + " (" + epName + ")",
-                                    url: directM3u8,
-                                    quality: "1080p",
-                                    headers: {
-                                        "User-Agent": UA,
-                                        "Referer": origin + "/",
-                                        "Origin": origin
-                                    }
-                                }));
-                            } else if (embedUrl) {
+                            if (embedUrl) {
                                 tasks.push(
+                                    // Hàm extractStreamFromUpload18 giữ nguyên như bản trước
                                     extractStreamFromUpload18(embedUrl).then(function (res) {
                                         if (!res || !res.url) return null;
                                         return {
                                             name: "AVDB Plugin",
-                                            title: label + " (" + epName + ")",
+                                            title: "▶️ Phát Trực Tiếp (iPad Native)",
                                             url: res.url,
                                             quality: "1080p",
                                             headers: {
