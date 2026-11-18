@@ -32,19 +32,12 @@ function extractHlsLocal(embedUrl) {
 
 function getStreams(tmdbId, mediaType, season, episode) {
     var rawId = String(tmdbId || "").trim();
-    var queryPromise;
-
-    // Bắt đúng Fake IMDb ID (tt99...) mà máy chủ Render truyền cho iPad
+    
+    // Nếu Nuvio truyền đúng ID chứa tt99...
     if (rawId.indexOf("tt99") === 0) {
         var numericId = rawId.replace("tt99", "");
-        queryPromise = Promise.resolve(BASE_API + "?ac=detail&ids=" + encodeURIComponent(numericId));
-    } else {
-        return Promise.resolve([]); // Bỏ qua nếu không phải luồng từ AVDB Render
-    }
-
-    return queryPromise
-        .then(function (apiUrl) {
-            return fetch(apiUrl, { headers: { "User-Agent": UA, "Referer": "https://avdbapi.com/" } });
+        return fetch(BASE_API + "?ac=detail&ids=" + encodeURIComponent(numericId), { 
+            headers: { "User-Agent": UA, "Referer": "https://avdbapi.com/" } 
         })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (json) {
@@ -59,7 +52,9 @@ function getStreams(tmdbId, mediaType, season, episode) {
 
                     if (directM3u8) {
                         tasks.push(Promise.resolve({
-                            name: "AVDB Native", title: "▶️ Phát Trực Tiếp", url: directM3u8,
+                            name: "AVDB Native", 
+                            title: "▶️ Phát Trực Tiếp (" + epName + ")", 
+                            url: directM3u8,
                             headers: { "User-Agent": UA, "Referer": "https://upload18.org/" }
                         }));
                     } else if (embedUrl) {
@@ -68,7 +63,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
                                 if (!res || !res.url) return null;
                                 return {
                                     name: "AVDB Native",
-                                    title: "▶️ Phát Trực Tiếp",
+                                    title: "▶️ Phát Trực Tiếp (" + epName + ")",
                                     url: res.url,
                                     headers: { "User-Agent": UA, "Referer": res.referer, "Origin": res.origin }
                                 };
@@ -80,6 +75,9 @@ function getStreams(tmdbId, mediaType, season, episode) {
 
             return Promise.all(tasks).then(function (arr) { return arr.filter(Boolean); });
         }).catch(function () { return []; });
+    }
+    
+    return Promise.resolve([]);
 }
 
 module.exports = { getStreams: getStreams };
