@@ -1,33 +1,17 @@
 {
-  "name": "AVDB JAV Providers",
-  "version": "1.5.3",
-  "description": "Direct HLS stream provider for AVDBAPI on Nuvio iPad",
+  "name": "AVDB JAV Plugin",
+  "version": "2.0.0",
+  "description": "Trích xuất HLS cục bộ bằng mạng nội bộ của iPad",
   "author": "kungfu0609",
   "scrapers": [
     {
-      "id": "avdb-jav-native",
-      "name": "AVDB Native Player",
-      "description": "Phát trực tiếp luồng HLS (.m3u8) từ AVDBAPI trên trình phát gốc Nuvio",
-      "version": "1.5.3",
-      "author": "kungfu0609",
-      "supportedTypes": [
-        "movie",
-        "tv"
-      ],
+      "id": "avdb-plugin",
+      "name": "AVDB iPad Native",
+      "version": "2.0.0",
+      "supportedTypes": ["movie", "tv"],
       "filename": "avdb.js",
       "enabled": true,
-      "contentLanguage": [
-        "ja",
-        "vi",
-        "zh",
-        "en"
-      ],
-      "formats": [
-        "m3u8",
-        "mp4"
-      ],
-      "limited": false,
-      "disabledPlatforms": []
+      "formats": ["m3u8", "mp4"]
     }
   ]
 }
