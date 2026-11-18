@@ -1,143 +1,152 @@
-const BASE_API = "https://avdbapi.com/api.php/provide/vod";
-const CINEMETA_BASE = "https://v3-cinemeta.strem.io/meta";
-const UA = "Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+/**
+ * Nuvio Native Plugin: AVDB Direct Player (avdb.js)
+ * Tối ưu cho QuickJS / Hermes trên Nuvio iPadOS
+ */
+
+var BASE_API = "https://avdbapi.com/api.php/provide/vod";
+var CINEMETA_BASE = "https://v3-cinemeta.strem.io/meta";
+var UA = "Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+
+function getOrigin(urlStr) {
+    var m = String(urlStr || "").match(/^(https?:\/\/[^\/]+)/i);
+    return m ? m[1] : "https://upload18.org";
+}
+
+function getHost(urlStr) {
+    var m = String(urlStr || "").match(/^https?:\/\/([^\/]+)/i);
+    return m ? m[1] : "upload18.org";
+}
 
 function unpackDeanEdwards(packed) {
     try {
-        const match = packed.match(/eval\(function\(p,a,c,k,e,[dr]\)\{[\s\S]*?\}\('([\s\S]*?)',\s*(\d+),\s*(\d+),\s*'([\s\S]*?)'\.split\('\|'\)/);
-        if (!match) return packed;
-        const p = match[1];
-        const a = parseInt(match[2], 10);
-        let c = parseInt(match[3], 10);
-        const k = match[4].split("|");
-        const e = function (num) {
+        var match = packed.match(/eval\(function\(p,a,c,k,e,[dr]\)\{[\s\S]*?\}\('([\s\S]*?)',\s*(\d+),\s*(\d+),\s*'([\s\S]*?)'\.split\('\|'\)/);
+        if (!match) return "";
+        var p = match[1];
+        var a = parseInt(match[2], 10);
+        var c = parseInt(match[3], 10);
+        var k = match[4].split("|");
+        var e = function (num) {
             return (num < a ? "" : e(parseInt(num / a, 10))) + ((num = num % a) > 35 ? String.fromCharCode(num + 29) : num.toString(36));
         };
-        const dict = {};
-        while (c--) dict[e(c)] = k[c] || e(c);
-        return p.replace(/\b\w+\b/g, function (w) { return dict[w] || w; });
-    } catch (err) {
-        return packed;
-    }
-}
-
-function getOrigin(urlStr) {
-    const match = String(urlStr || "").match(/^(https?:\/\/[^\/]+)/i);
-    return match ? match[1] : "https://upload18.org";
-}
-
-function extractHlsOnIpad(embedUrl) {
-    if (!embedUrl) return Promise.resolve(null);
-    const embedOrigin = getOrigin(embedUrl);
-
-    return fetch(embedUrl, {
-        method: "GET",
-        headers: {
-            "User-Agent": UA,
-            "Referer": "https://avdbapi.com/",
-            "Origin": "https://avdbapi.com",
-            "Sec-Fetch-Dest": "iframe",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "cross-site",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+        var dict = {};
+        while (c--) {
+            dict[e(c)] = k[c] || e(c);
         }
-    })
-        .then(function (res) { return res.text(); })
-        .then(function (rawHtml) {
-            const decodedHtml = rawHtml.indexOf("eval(function(p,a,c,k,e,") !== -1
-                ? rawHtml + "\n" + unpackDeanEdwards(rawHtml)
-                : rawHtml;
+        return p.replace(/\b\w+\b/g, function (w) {
+            return dict[w] || w;
+        });
+    } catch (err) {
+        return "";
+    }
+}
 
-            const mediaMatch = decodedHtml.match(/https?:\/\/[^\s"'<>\\]+\.(?:m3u8|mp4)(?:\?[^\s"'<>\\]*)?/i);
-            if (mediaMatch && mediaMatch[0]) {
-                return {
-                    url: mediaMatch[0].replace(/\\\//g, "/").replace(/\\/g, ""),
-                    origin: embedOrigin
-                };
+function extractStreamFromUpload18(embedUrl) {
+    if (!embedUrl) return Promise.resolve(null);
+    var origin = getOrigin(embedUrl);
+    var host = getHost(embedUrl);
+    var parts = embedUrl.split("?")[0].split("/").filter(Boolean);
+    var hash = parts[parts.length - 1] || "";
+
+    // Bước 1: Thử gọi API nguồn trực tiếp bằng IP Wi-Fi của iPad
+    var tryApi = hash
+        ? fetch(origin + "/api/source/" + hash, {
+              method: "POST",
+              headers: {
+                  "User-Agent": UA,
+                  "Referer": embedUrl,
+                  "Origin": origin,
+                  "X-Requested-With": "XMLHttpRequest",
+                  "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+              },
+              body: "r=https%3A%2F%2Favdbapi.com%2F&d=" + encodeURIComponent(host)
+          })
+              .then(function (r) { return r.text(); })
+              .then(function (txt) {
+                  var clean = txt.replace(/\\\//g, "/");
+                  var m = clean.match(/https?:\/\/[^\s"'<>\\]+?\.(?:m3u8|mp4)(?:\?[^\s"'<>\\]*)?/i);
+                  return m ? { url: m[0], origin: origin, referer: embedUrl } : null;
+              })
+              .catch(function () { return null; })
+        : Promise.resolve(null);
+
+    return tryApi.then(function (apiResult) {
+        if (apiResult) return apiResult;
+
+        // Bước 2: Tải trang embed với Sec-Fetch-Dest: iframe trên IP của iPad
+        return fetch(embedUrl, {
+            method: "GET",
+            headers: {
+                "User-Agent": UA,
+                "Referer": "https://avdbapi.com/",
+                "Origin": "https://avdbapi.com",
+                "Sec-Fetch-Dest": "iframe",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "cross-site"
             }
-            return null;
         })
-        .catch(function () { return null; });
-}
-
-function resolveApiUrl(itemId, mediaType) {
-    const rawId = String(itemId || "").trim();
-
-    // Nhận trực tiếp ID từ AVDB Addon trên Render (ví dụ: avdb_653546)
-    if (rawId.indexOf("avdb_") === 0) {
-        const numericId = rawId.replace("avdb_", "").split(":")[0];
-        return Promise.resolve(BASE_API + "?ac=detail&ids=" + encodeURIComponent(numericId));
-    }
-
-    // Nhận mã JAV trực tiếp
-    if (/^[a-zA-Z]{2,6}-\d{2,5}$/i.test(rawId)) {
-        return Promise.resolve(BASE_API + "?ac=detail&wd=" + encodeURIComponent(rawId.toUpperCase()));
-    }
-
-    // Fallback qua Cinemeta nếu mở từ danh mục TMDB/IMDb
-    const type = mediaType === "tv" ? "series" : "movie";
-    const metaId = rawId.indexOf("tt") === 0 ? rawId : "tmdb:" + rawId;
-
-    return fetch(CINEMETA_BASE + "/" + type + "/" + encodeURIComponent(metaId) + ".json", {
-        headers: { "User-Agent": UA }
-    })
-        .then(function (res) { return res.ok ? res.json() : null; })
-        .then(function (data) {
-            const name = data && data.meta && data.meta.name ? data.meta.name : "";
-            if (!name) return "";
-            const codeMatch = name.match(/\b([A-Z]{2,6}-\d{2,5})\b/i);
-            const query = codeMatch ? codeMatch[1].toUpperCase() : name;
-            return BASE_API + "?ac=detail&wd=" + encodeURIComponent(query);
-        })
-        .catch(function () { return ""; });
-}
-
-// Trong avdb.js trên GitHub, dùng cùng bộ giải mã Base64 + Dean Edwards + AJAX POST:
-function decodeBase64Matches(text) {
-    var decodedChunks = [];
-    var b64Regex = /(?:atob\(['"]([A-Za-z0-9+/=]{20,})['"]\)|['"]([A-Za-z0-9+/=]{40,})['"])/g;
-    var m;
-    while ((m = b64Regex.exec(text)) !== null) {
-        var candidate = m[1] || m[2];
-        try {
-            if (typeof atob === "function") {
-                var dec = atob(candidate);
-                if (dec.indexOf("http") !== -1 || dec.indexOf(".m3u8") !== -1) {
-                    decodedChunks.push(dec);
+            .then(function (res) { return res.text(); })
+            .then(function (html) {
+                var unpacked = html.indexOf("eval(function(p,a,c,k,e,") !== -1 ? unpackDeanEdwards(html) : "";
+                var combined = (html + "\n" + unpacked).replace(/\\\//g, "/");
+                var m = combined.match(/https?:\/\/[^\s"'<>\\]+?\.(?:m3u8|mp4)(?:\?[^\s"'<>\\]*)?/i);
+                if (m) {
+                    return { url: m[0].replace(/\\/g, ""), origin: origin, referer: embedUrl };
                 }
-            }
-        } catch (e) {}
-    }
-    return decodedChunks.join("\n");
+                return null;
+            })
+            .catch(function () { return null; });
+    });
 }
 
-function getStreams(itemId, mediaType, season, episode) {
-    return resolveApiUrl(itemId, mediaType)
+function getStreams(tmdbId, mediaType, season, episode) {
+    var rawId = String(tmdbId || "").trim();
+    var queryPromise;
+
+    if (rawId.indexOf("avdb_") === 0) {
+        var numericId = rawId.replace("avdb_", "").split(":")[0];
+        queryPromise = Promise.resolve(BASE_API + "?ac=detail&ids=" + encodeURIComponent(numericId));
+    } else if (/^[a-zA-Z]{2,6}-\d{2,5}$/i.test(rawId)) {
+        queryPromise = Promise.resolve(BASE_API + "?ac=detail&wd=" + encodeURIComponent(rawId.toUpperCase()));
+    } else {
+        var type = mediaType === "tv" ? "series" : "movie";
+        var metaId = rawId.indexOf("tt") === 0 ? rawId : "tmdb:" + rawId;
+        queryPromise = fetch(CINEMETA_BASE + "/" + type + "/" + encodeURIComponent(metaId) + ".json")
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+                var name = data && data.meta && data.meta.name ? data.meta.name : "";
+                if (!name) return "";
+                var codeMatch = name.match(/\b([A-Z]{2,6}-\d{2,5})\b/i);
+                var kw = codeMatch ? codeMatch[1].toUpperCase() : name;
+                return BASE_API + "?ac=detail&wd=" + encodeURIComponent(kw);
+            })
+            .catch(function () { return ""; });
+    }
+
+    return queryPromise
         .then(function (apiUrl) {
             if (!apiUrl) return [];
             return fetch(apiUrl, {
                 headers: { "User-Agent": UA, "Referer": "https://avdbapi.com/" }
             })
-                .then(function (res) { return res.ok ? res.json() : null; })
+                .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (json) {
-                    const list = json && Array.isArray(json.list) ? json.list.slice(0, 3) : [];
-                    const tasks = [];
+                    var list = json && Array.isArray(json.list) ? json.list.slice(0, 2) : [];
+                    var tasks = [];
 
                     list.forEach(function (item) {
-                        const serverData = (item.episodes && item.episodes.server_data) || {};
-                        const codePrefix = item.movie_code ? "[" + item.movie_code + "] " : "";
-                        const itemTitle = item.name || item.movie_code || "AVDB";
+                        var serverData = (item.episodes && item.episodes.server_data) || {};
+                        var label = item.movie_code ? "[" + item.movie_code + "] " + (item.name || "") : (item.name || "AVDB");
 
                         Object.keys(serverData).forEach(function (epName) {
-                            const epInfo = serverData[epName] || {};
-                            const directM3u8 = (epInfo.link_m3u8 || "").trim();
-                            const embedUrl = (epInfo.link_embed || "").trim();
+                            var epInfo = serverData[epName] || {};
+                            var directM3u8 = (epInfo.link_m3u8 || "").trim();
+                            var embedUrl = (epInfo.link_embed || "").trim();
 
                             if (directM3u8) {
-                                const origin = embedUrl ? getOrigin(embedUrl) : "https://upload18.org";
+                                var origin = getOrigin(embedUrl || directM3u8);
                                 tasks.push(Promise.resolve({
-                                    name: "AVDB Direct (iPad)",
-                                    title: "▶️ " + codePrefix + itemTitle + " (" + epName + ")",
+                                    name: "AVDB Plugin",
+                                    title: label + " (" + epName + ")",
                                     url: directM3u8,
                                     quality: "1080p",
                                     headers: {
@@ -148,33 +157,33 @@ function getStreams(itemId, mediaType, season, episode) {
                                 }));
                             } else if (embedUrl) {
                                 tasks.push(
-                                    extractHlsOnIpad(embedUrl).then(function (extracted) {
-                                        if (extracted && extracted.url) {
-                                            return {
-                                                name: "AVDB Native HLS",
-                                                title: "▶️ " + codePrefix + itemTitle + " (" + epName + ")",
-                                                url: extracted.url,
-                                                quality: "1080p",
-                                                headers: {
-                                                    "User-Agent": UA,
-                                                    "Referer": extracted.origin + "/",
-                                                    "Origin": extracted.origin
-                                                }
-                                            };
-                                        }
-                                        return null;
+                                    extractStreamFromUpload18(embedUrl).then(function (res) {
+                                        if (!res || !res.url) return null;
+                                        return {
+                                            name: "AVDB Plugin",
+                                            title: label + " (" + epName + ")",
+                                            url: res.url,
+                                            quality: "1080p",
+                                            headers: {
+                                                "User-Agent": UA,
+                                                "Referer": res.referer,
+                                                "Origin": res.origin
+                                            }
+                                        };
                                     })
                                 );
                             }
                         });
                     });
 
-                    return Promise.all(tasks).then(function (results) {
-                        return results.filter(Boolean);
+                    return Promise.all(tasks).then(function (arr) {
+                        return arr.filter(Boolean);
                     });
                 });
         })
-        .catch(function () { return []; });
+        .catch(function () {
+            return [];
+        });
 }
 
 module.exports = { getStreams: getStreams };
