@@ -5,7 +5,7 @@
   "author": "kungfu0609",
   "scrapers": [
     {
-      "id": "avdb-plugin-native",
+      "id": "avdb-plugin",
       "name": "AVDB iPad Native",
       "version": "3.0.1",
       "supportedTypes": ["movie", "tv"],
