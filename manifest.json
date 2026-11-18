@@ -1,13 +1,13 @@
 {
   "name": "AVDB JAV Plugin",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "Trích xuất luồng Native cục bộ cho Nuvio Player",
   "author": "kungfu0609",
   "scrapers": [
     {
       "id": "avdb-plugin",
-      "name": "AVDB iPad Native",
-      "version": "3.0.1",
+      "name": "AVDB Nuvio Native",
+      "version": "3.0.2",
       "supportedTypes": ["movie", "tv"],
       "filename": "avdb.js",
       "enabled": true,
