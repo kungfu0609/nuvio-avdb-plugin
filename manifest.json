@@ -1,0 +1,17 @@
+{
+  "name": "AVDB JAV Provider",
+  "version": "1.0.0",
+  "providers": [
+    {
+      "id": "avdb-jav",
+      "name": "AVDB (JAV / Uncensored / Hentai)",
+      "description": "Truy xuất trực tiếp luồng HLS từ AVDBAPI & Upload18 bên trong Nuvio (không cần server trung gian)",
+      "version": "1.0.0",
+      "type": "stream",
+      "mediaTypes": ["movie", "tv"],
+      "filename": "avdb.js",
+      "enabled": true,
+      "supportedScrapers": ["avdb-jav"]
+    }
+  ]
+}
